@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>プレイリスト</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.7/jsmediatags.min.js"></script>
+<style>
+  :root{
+    --bg:#0E1712;
+    --bg-card:#182319;
+    --bg-card-hover:#1F2C21;
+    --ink:#EFE8D8;
+    --ink-soft:#96A08F;
+    --ink-faint:#5B6459;
+    --line:#263329;
+    --amber:#D4AF6A;
+    --amber-dim:#8C7440;
+    --amber-glow:rgba(212,175,106,0.35);
+    --orange:#D9793D;
+    --orange-glow:rgba(217,121,61,0.4);
+    --wine:#5A3A3A;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top, #1B2A1E 0%, var(--bg) 55%);
+    color:var(--ink);
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:48px 20px 80px;
+  }
+  .app{ width:100%; max-width:560px; }
+  header{ margin-bottom:32px; }
+  header h1{
+    font-family:'Shippori Mincho', serif;
+    font-weight:500; font-size:27px; letter-spacing:0.07em;
+    color:var(--ink);
+    text-shadow:0 0 24px rgba(217,121,61,0.16);
+  }
+  header p{ margin-top:6px; font-size:12px; color:var(--ink-soft); letter-spacing:0.04em; }
+
+  /* --- アルバム一覧 --- */
+  .section-label{
+    font-size:11px; color:var(--ink-faint); letter-spacing:0.1em;
+    margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;
+    text-transform:uppercase;
+  }
+  .add-album-btn{
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:12px; background:none; border:1px solid var(--line); color:var(--ink-soft);
+    padding:5px 14px; border-radius:999px; cursor:pointer; transition:0.2s;
+  }
+  .add-album-btn:hover{ border-color:var(--amber); color:var(--amber); }
+
+  .album-form{ display:none; gap:8px; margin-bottom:16px; }
+  .album-form.open{ display:flex; }
+  .album-form input[type="text"]{
+    flex:1; font-family:'Zen Kaku Gothic New'; font-size:13px;
+    border:1px solid var(--line); background:var(--bg-card); color:var(--ink);
+    padding:8px 12px; border-radius:8px; outline:none;
+  }
+  .album-form input[type="text"]:focus{ border-color:var(--amber); }
+  .album-form button{
+    font-size:12px; border:none; background:var(--amber); color:#1A1410;
+    font-weight:700; padding:0 16px; border-radius:8px; cursor:pointer;
+  }
+
+  .album-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(96px,1fr));
+    gap:14px; margin-bottom:34px;
+  }
+  .album-card{ cursor:pointer; text-align:left; }
+  .album-art{
+    width:100%; aspect-ratio:1; border-radius:10px; background:var(--bg-card);
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden; margin-bottom:7px; border:1px solid var(--line);
+    transition:border-color 0.2s, box-shadow 0.2s;
+  }
+  .album-art img{ width:100%; height:100%; object-fit:cover; }
+  .album-art svg{ color:var(--ink-faint); }
+  .album-card.active .album-art{ border-color:var(--orange); box-shadow:0 0 0 1px var(--orange), 0 0 18px var(--orange-glow); }
+  .album-card:hover .album-art{ border-color:var(--amber-dim); }
+  .album-name{ font-size:12.5px; font-weight:500; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .album-count{ font-size:10.5px; color:var(--ink-faint); font-family:'JetBrains Mono', monospace; }
+  .no-albums{ font-size:12px; color:var(--ink-soft); margin-bottom:34px; }
+
+  /* --- 現在のアルバム --- */
+  .current-album-bar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .current-album-name{ font-family:'Shippori Mincho', serif; font-size:17px; font-weight:500; color:var(--ink); }
+  .album-actions{ display:flex; gap:10px; align-items:center; }
+  .add-btn{
+    font-family:'Zen Kaku Gothic New', sans-serif; font-size:12.5px; letter-spacing:0.02em;
+    background:none; border:1px solid var(--line); color:var(--ink-soft);
+    padding:7px 14px; border-radius:999px; cursor:pointer; transition:0.2s;
+  }
+  .add-btn:hover{ border-color:var(--amber); color:var(--amber); }
+  .icon-btn{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:4px; }
+  .icon-btn:hover{ color:var(--amber); }
+  input[type="file"]{ display:none; }
+
+  /* --- 再生中カード --- */
+  .now-playing{
+    background:linear-gradient(180deg, var(--bg-card) 0%, #10190F 100%);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:24px 22px 22px;
+    margin-bottom:26px;
+    box-shadow:0 20px 40px -20px rgba(0,0,0,0.6);
+  }
+  .np-body{ display:flex; gap:16px; margin-bottom:16px; }
+  .np-art{
+    width:64px; height:64px; border-radius:9px; background:#151318; flex-shrink:0;
+    overflow:hidden; display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--line); position:relative;
+  }
+  .np-art.playing{ box-shadow:0 0 0 1px var(--orange), 0 0 22px var(--orange-glow); }
+  .np-art img{ width:100%; height:100%; object-fit:cover; }
+  .np-art svg{ color:var(--ink-faint); }
+  .np-meta{ flex:1; min-width:0; padding-top:2px; }
+  .np-title{ font-family:'Shippori Mincho', serif; font-size:18px; font-weight:500; letter-spacing:0.02em; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .np-title.placeholder{ color:var(--ink-faint); font-family:'Zen Kaku Gothic New'; font-size:13px; }
+  .np-artist{ font-size:12px; color:var(--ink-soft); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .np-index{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-faint); margin-top:6px; }
+
+  /* --- イコライザー可視化 --- */
+  .visualizer-wrap{ height:44px; margin-bottom:14px; border-radius:8px; overflow:hidden; background:#0F0D11; border:1px solid var(--line); }
+  #visualizer{ width:100%; height:100%; display:block; }
+
+  .progress-wrap{ display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  .time{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-faint); min-width:34px; }
+  .time.end{ text-align:right; }
+  .progress-track{ position:relative; flex:1; height:18px; display:flex; align-items:center; cursor:pointer; }
+  .progress-track::before{ content:''; position:absolute; left:0; right:0; height:2px; border-radius:2px; background:var(--line); }
+  .progress-fill{ position:absolute; left:0; height:2px; border-radius:2px; background:linear-gradient(90deg, var(--amber), var(--orange)); width:0%; box-shadow:0 0 8px var(--orange-glow); }
+  .progress-knot{ position:absolute; width:8px; height:8px; border-radius:50%; background:var(--orange); left:0%; transform:translateX(-50%); box-shadow:0 0 10px var(--orange-glow); }
+
+  .controls{ display:flex; align-items:center; justify-content:center; gap:26px; margin-bottom:18px; }
+  .ctrl-btn{ background:none; border:none; cursor:pointer; color:var(--ink-soft); padding:6px; display:flex; align-items:center; justify-content:center; opacity:0.9; transition:0.15s; }
+  .ctrl-btn:hover{ color:var(--ink); opacity:1; }
+  .ctrl-btn:active{ transform:scale(0.92); }
+  .ctrl-btn.active{ color:var(--amber); opacity:1; }
+  .play-btn{
+    width:48px; height:48px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #F0CB8C, var(--amber) 55%, var(--orange));
+    color:#1A1410; opacity:1; box-shadow:0 4px 18px -4px var(--orange-glow);
+  }
+  .play-btn:hover{ filter:brightness(1.08); }
+
+  .side-controls{ display:flex; justify-content:space-between; align-items:center; }
+  .vol-wrap{ display:flex; align-items:center; gap:8px; }
+  input[type="range"].vol{ -webkit-appearance:none; width:70px; height:2px; background:var(--line); outline:none; border-radius:2px; }
+  input[type="range"].vol::-webkit-slider-thumb{ -webkit-appearance:none; width:9px; height:9px; border-radius:50%; background:var(--amber); cursor:pointer; }
+  .lyrics-toggle{ font-size:11px; color:var(--ink-faint); background:none; border:none; cursor:pointer; letter-spacing:0.03em; }
+  .lyrics-toggle:hover{ color:var(--ink); }
+  .lyrics-toggle.active{ color:var(--amber); }
+
+  /* --- 歌詞パネル --- */
+  .lyrics-panel{ display:none; margin-top:18px; padding-top:16px; border-top:1px dashed var(--line); }
+  .lyrics-panel.open{ display:block; }
+  .lyrics-panel textarea{
+    width:100%; min-height:140px; font-family:'Zen Kaku Gothic New'; font-size:13px; line-height:1.9;
+    border:1px solid var(--line); border-radius:8px; padding:12px; background:#141216; color:var(--ink);
+    resize:vertical; outline:none;
+  }
+  .lyrics-panel textarea:focus{ border-color:var(--amber-dim); }
+  .lyrics-panel textarea::placeholder{ color:var(--ink-faint); }
+  .lyrics-hint{ font-size:10.5px; color:var(--ink-faint); margin-top:6px; }
+
+  /* --- プレイリスト --- */
+  .playlist{ list-style:none; }
+  .playlist li{ display:flex; align-items:center; gap:12px; padding:11px 8px; border-bottom:1px solid var(--line); cursor:pointer; border-radius:8px; transition:background 0.15s; }
+  .playlist li:hover{ background:var(--bg-card-hover); }
+  .playlist li.playing{ background:var(--bg-card-hover); }
+  .playlist li.playing .track-name{ color:var(--amber); font-weight:700; }
+  .track-thumb{ width:30px; height:30px; border-radius:5px; background:#151318; flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); }
+  .track-thumb img{ width:100%; height:100%; object-fit:cover; }
+  .track-thumb svg{ color:var(--ink-faint); width:14px; height:14px; }
+  .track-num{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-faint); width:18px; flex-shrink:0; }
+  .playlist li.playing .track-num{ color:var(--amber); }
+  .track-info{ flex:1; min-width:0; }
+  .track-name{ font-size:14px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .track-artist{ font-size:11px; color:var(--ink-faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .track-dur{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-faint); flex-shrink:0; }
+  .track-remove{ background:none; border:none; color:var(--ink-faint); font-size:14px; cursor:pointer; padding:2px 6px; opacity:0; transition:opacity 0.15s; flex-shrink:0; }
+  .playlist li:hover .track-remove{ opacity:1; }
+  .track-remove:hover{ color:var(--ink); }
+  .empty-tracks{ font-size:12px; color:var(--ink-faint); padding:16px 4px; }
+
+  footer{ text-align:center; margin-top:40px; font-size:11px; color:var(--ink-faint); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <h1>プレイリスト</h1>
+    <p>アルバムごとに曲をまとめて聴く</p>
+  </header>
+
+  <div class="section-label">
+    <span>アルバム</span>
+    <button class="add-album-btn" id="newAlbumBtn">＋ 新規アルバム</button>
+  </div>
+  <div class="album-form" id="albumForm">
+    <input type="text" id="albumNameInput" placeholder="アルバム名" maxlength="60">
+    <button id="albumCreateBtn">作成</button>
+  </div>
+  <div class="album-grid" id="albumGrid"></div>
+  <div class="no-albums" id="noAlbums" style="display:none;">アルバムがまだありません。「＋ 新規アルバム」から作ってね</div>
+
+  <div id="albumDetail" style="display:none;">
+    <div class="current-album-bar">
+      <div class="current-album-name" id="currentAlbumName"></div>
+      <div class="album-actions">
+        <button class="icon-btn" id="artworkBtn" title="アートワークを変更">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        </button>
+        <input type="file" id="artworkInput" accept="image/*">
+        <label class="add-btn" for="trackInput">＋ 曲を追加</label>
+        <input type="file" id="trackInput" accept="audio/*" multiple>
+      </div>
+    </div>
+
+    <div class="now-playing">
+      <div class="np-body">
+        <div class="np-art" id="npArt"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <div class="np-meta">
+          <div class="np-title placeholder" id="npTitle">曲を選んでください</div>
+          <div class="np-artist" id="npArtist"></div>
+          <div class="np-index" id="npIndex"></div>
+        </div>
+      </div>
+
+      <div class="visualizer-wrap"><canvas id="visualizer"></canvas></div>
+
+      <div class="progress-wrap">
+        <span class="time" id="curTime">0:00</span>
+        <div class="progress-track" id="progressTrack">
+          <div class="progress-fill" id="progressFill"></div>
+          <div class="progress-knot" id="progressKnot"></div>
+        </div>
+        <span class="time end" id="durTime">0:00</span>
+      </div>
+
+      <div class="controls">
+        <button class="ctrl-btn" id="shuffleBtn" title="シャッフル">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M17 3l4 4-4 4"/><path d="M21 7H15c-2 0-3 1-4 2.5L9 13"/><path d="M17 21l4-4-4-4"/><path d="M3 7h4c2 0 3 .8 3.8 2"/><path d="M3 17h6c1.5 0 2.5-.7 3.3-2"/></svg>
+        </button>
+        <button class="ctrl-btn" id="prevBtn" title="前の曲">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zM20 6v12l-9-6z"/></svg>
+        </button>
+        <button class="ctrl-btn play-btn" id="playBtn" title="再生">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button class="ctrl-btn" id="nextBtn" title="次の曲">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6h2v12h-2zM4 6v12l9-6z"/></svg>
+        </button>
+        <button class="ctrl-btn" id="repeatBtn" title="リピート">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+      </div>
+
+      <div class="side-controls">
+        <div class="vol-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:var(--ink-faint)"><path d="M3 9v6h4l5 5V4L7 9H3z"/></svg>
+          <input type="range" class="vol" id="volSlider" min="0" max="1" step="0.01" value="0.8">
+        </div>
+        <button class="lyrics-toggle" id="lyricsToggle">歌詞</button>
+      </div>
+
+      <div class="lyrics-panel" id="lyricsPanel">
+        <textarea id="lyricsText" placeholder="この曲の歌詞をここに入力…（自動で保存されます）" disabled></textarea>
+        <div class="lyrics-hint" id="lyricsHint">曲を選ぶと編集できます</div>
+      </div>
+    </div>
+
+    <ul class="playlist" id="playlist"></ul>
+    <div class="empty-tracks" id="emptyTracks" style="display:none;">このアルバムにはまだ曲がありません</div>
+  </div>
+
+  <footer>すべて端末内に保存 — ブラウザを閉じても曲は消えません</footer>
+</div>
+
+<audio id="audio" crossorigin="anonymous"></audio>
+
+<script>
+  // ---------- IndexedDB ----------
+  const DB_NAME = 'mp3playerDB';
+  let db;
+  function openDB(){
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const _db = e.target.result;
+        _db.createObjectStore('albums', { keyPath: 'id' });
+        const trackStore = _db.createObjectStore('tracks', { keyPath: 'id' });
+        trackStore.createIndex('albumId', 'albumId', { unique: false });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  function store(name, mode='readonly'){ return db.transaction(name, mode).objectStore(name); }
+  function idbGetAll(name){ return new Promise((res, rej) => { const r = store(name).getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+  function idbGetAllByAlbum(albumId){ return new Promise((res, rej) => { const r = store('tracks').index('albumId').getAll(albumId); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+  function idbPut(name, val){ return new Promise((res, rej) => { const r = store(name,'readwrite').put(val); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
+  function idbDelete(name, key){ return new Promise((res, rej) => { const r = store(name,'readwrite').delete(key); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
+
+  function uid(){ return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,10); }
+  function stripExt(name){ return name.replace(/\.[^/.]+$/, ''); }
+  function fmtTime(sec){ if(!isFinite(sec) || sec < 0) sec = 0; const m = Math.floor(sec/60); const s = Math.floor(sec%60).toString().padStart(2,'0'); return `${m}:${s}`; }
+
+  // ---------- State ----------
+  let albums = [];
+  let currentAlbumId = null;
+  let tracks = [];
+  let currentTrackIndex = -1;
+  let isPlaying = false;
+  let shuffleOn = false;
+  let repeatMode = 'none';
+  let playOrder = [];
+  let currentObjectUrl = null;
+  let currentArtUrl = null;
+  let lyricsSaveTimer = null;
+
+  // ---------- DOM ----------
+  const audio = document.getElementById('audio');
+  const albumGrid = document.getElementById('albumGrid');
+  const noAlbums = document.getElementById('noAlbums');
+  const albumDetail = document.getElementById('albumDetail');
+  const currentAlbumName = document.getElementById('currentAlbumName');
+  const newAlbumBtn = document.getElementById('newAlbumBtn');
+  const albumForm = document.getElementById('albumForm');
+  const albumNameInput = document.getElementById('albumNameInput');
+  const albumCreateBtn = document.getElementById('albumCreateBtn');
+  const artworkBtn = document.getElementById('artworkBtn');
+  const artworkInput = document.getElementById('artworkInput');
+  const trackInput = document.getElementById('trackInput');
+  const playlistEl = document.getElementById('playlist');
+  const emptyTracks = document.getElementById('emptyTracks');
+  const npTitle = document.getElementById('npTitle');
+  const npArtist = document.getElementById('npArtist');
+  const npIndex = document.getElementById('npIndex');
+  const npArt = document.getElementById('npArt');
+  const playBtn = document.getElementById('playBtn');
+  const playIcon = document.getElementById('playIcon');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const shuffleBtn = document.getElementById('shuffleBtn');
+  const repeatBtn = document.getElementById('repeatBtn');
+  const progressTrack = document.getElementById('progressTrack');
+  const progressFill = document.getElementById('progressFill');
+  const progressKnot = document.getElementById('progressKnot');
+  const curTimeEl = document.getElementById('curTime');
+  const durTimeEl = document.getElementById('durTime');
+  const volSlider = document.getElementById('volSlider');
+  const lyricsToggle = document.getElementById('lyricsToggle');
+  const lyricsPanel = document.getElementById('lyricsPanel');
+  const lyricsText = document.getElementById('lyricsText');
+  const lyricsHint = document.getElementById('lyricsHint');
+  const vizCanvas = document.getElementById('visualizer');
+  const vizCtx = vizCanvas.getContext('2d');
+
+  audio.volume = 0.8;
+  const ART_PLACEHOLDER_ALBUM = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
+  const ART_PLACEHOLDER_TRACK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+  const ART_PLACEHOLDER_NP = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+
+  // ---------- Audio visualizer (Web Audio API) ----------
+  let audioCtx, analyser, sourceNode, freqData;
+  let vizRAF = null;
+
+  function setupAudioGraph(){
+    if(audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sourceNode = audioCtx.createMediaElementSource(audio);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 64;
+    analyser.smoothingTimeConstant = 0.75;
+    sourceNode.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+  }
+
+  function resizeCanvas(){
+    const rect = vizCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    vizCanvas.width = rect.width * dpr;
+    vizCanvas.height = rect.height * dpr;
+    vizCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  function drawVisualizer(){
+    const w = vizCanvas.getBoundingClientRect().width;
+    const h = vizCanvas.getBoundingClientRect().height;
+    vizCtx.clearRect(0, 0, w, h);
+    if(!isPlaying || !analyser){
+      drawIdleLine(w, h);
+      return;
+    }
+    analyser.getByteFrequencyData(freqData);
+    const barCount = 28;
+    const gap = 3;
+    const barWidth = (w - gap * (barCount - 1)) / barCount;
+    for(let i = 0; i < barCount; i++){
+      const binIndex = Math.floor((i / barCount) * freqData.length);
+      const v = freqData[binIndex] / 255;
+      const barH = Math.max(2, v * h);
+      const x = i * (barWidth + gap);
+      const y = h - barH;
+      const grad = vizCtx.createLinearGradient(0, y, 0, h);
+      grad.addColorStop(0, '#E9954A');
+      grad.addColorStop(0.55, '#D4AF6A');
+      grad.addColorStop(1, '#2F4A34');
+      vizCtx.fillStyle = grad;
+      vizCtx.shadowColor = 'rgba(217,121,61,0.5)';
+      vizCtx.shadowBlur = 6;
+      roundRect(vizCtx, x, y, barWidth, barH, 2);
+      vizCtx.fill();
+    }
+    vizRAF = requestAnimationFrame(drawVisualizer);
+  }
+
+  function drawIdleLine(w, h){
+    vizCtx.shadowBlur = 0;
+    vizCtx.strokeStyle = '#2A2830';
+    vizCtx.lineWidth = 1.5;
+    vizCtx.beginPath();
+    vizCtx.moveTo(0, h/2);
+    vizCtx.lineTo(w, h/2);
+    vizCtx.stroke();
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // ---------- Init ----------
+  (async function init(){
+    db = await openDB();
+    albums = await idbGetAll('albums');
+    if(albums.length === 0){
+      const a = { id: uid(), name: 'マイプレイリスト', artwork: null, createdAt: Date.now() };
+      await idbPut('albums', a);
+      albums = [a];
+    }
+    renderAlbumGrid();
+    selectAlbum(albums[0].id);
+    resizeCanvas();
+    drawIdleLine(vizCanvas.getBoundingClientRect().width, vizCanvas.getBoundingClientRect().height);
+  })();
+
+  // ---------- Albums ----------
+  newAlbumBtn.addEventListener('click', () => {
+    albumForm.classList.toggle('open');
+    if(albumForm.classList.contains('open')) albumNameInput.focus();
+  });
+  albumCreateBtn.addEventListener('click', createAlbum);
+  albumNameInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') createAlbum(); });
+
+  async function createAlbum(){
+    const name = albumNameInput.value.trim();
+    if(!name) return;
+    const a = { id: uid(), name, artwork: null, createdAt: Date.now() };
+    await idbPut('albums', a);
+    albums.push(a);
+    albumNameInput.value = '';
+    albumForm.classList.remove('open');
+    renderAlbumGrid();
+    selectAlbum(a.id);
+  }
+
+  function renderAlbumGrid(){
+    albumGrid.innerHTML = '';
+    noAlbums.style.display = albums.length ? 'none' : 'block';
+    albums.forEach(a => {
+      const div = document.createElement('div');
+      div.className = 'album-card' + (a.id === currentAlbumId ? ' active' : '');
+      const artHtml = a.artwork ? `<img src="${URL.createObjectURL(a.artwork)}">` : ART_PLACEHOLDER_ALBUM;
+      div.innerHTML = `
+        <div class="album-art">${artHtml}</div>
+        <div class="album-name">${escapeHtml(a.name)}</div>
+      `;
+      div.addEventListener('click', () => selectAlbum(a.id));
+      albumGrid.appendChild(div);
+    });
+  }
+
+  function escapeHtml(s){ const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+  async function selectAlbum(albumId){
+    currentAlbumId = albumId;
+    const album = albums.find(a => a.id === albumId);
+    albumDetail.style.display = 'block';
+    currentAlbumName.textContent = album.name;
+    renderAlbumGrid();
+    stopPlayback();
+    tracks = (await idbGetAllByAlbum(albumId)).sort((x,y) => x.order - y.order);
+    currentTrackIndex = -1;
+    rebuildOrder();
+    renderPlaylist();
+    resetNowPlaying();
+  }
+
+  // ---------- Artwork ----------
+  artworkBtn.addEventListener('click', () => artworkInput.click());
+  artworkInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const album = albums.find(a => a.id === currentAlbumId);
+    album.artwork = file;
+    await idbPut('albums', album);
+    renderAlbumGrid();
+    if(currentTrackIndex === -1) updateNpArt(album.artwork);
+    artworkInput.value = '';
+  });
+
+  // ---------- Tracks ----------
+  trackInput.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    trackInput.value = '';
+    const album = albums.find(a => a.id === currentAlbumId);
+    let order = tracks.length;
+    for(const file of files){
+      const id3 = await readID3(file).catch(() => ({}));
+      const track = {
+        id: uid(), albumId: currentAlbumId,
+        name: id3.title || stripExt(file.name), artist: id3.artist || '',
+        audio: file, artwork: id3.artwork || null,
+        lyrics: '', duration: 0, order: order++
+      };
+      await idbPut('tracks', track);
+      tracks.push(track);
+      if(!album.artwork && track.artwork){
+        album.artwork = track.artwork;
+        await idbPut('albums', album);
+        renderAlbumGrid();
+      }
+      const tempUrl = URL.createObjectURL(file);
+      const tempAudio = new Audio();
+      tempAudio.preload = 'metadata';
+      tempAudio.src = tempUrl;
+      tempAudio.addEventListener('loadedmetadata', async () => {
+        track.duration = tempAudio.duration;
+        await idbPut('tracks', track);
+        renderPlaylist();
+        URL.revokeObjectURL(tempUrl);
+      });
+    }
+    rebuildOrder();
+    renderPlaylist();
+  });
+
+  function readID3(file){
+    return new Promise((resolve) => {
+      if(typeof jsmediatags === 'undefined'){ resolve({}); return; }
+      jsmediatags.read(file, {
+        onSuccess: (tag) => {
+          const t = tag.tags || {};
+          let artworkBlob = null;
+          if(t.picture){
+            try{ const bytes = new Uint8Array(t.picture.data); artworkBlob = new Blob([bytes], { type: t.picture.format }); }catch(err){}
+          }
+          resolve({ title: t.title, artist: t.artist, artwork: artworkBlob });
+        },
+        onError: () => resolve({})
+      });
+    });
+  }
+
+  function rebuildOrder(){
+    playOrder = tracks.map((_, i) => i);
+    if(shuffleOn){
+      for(let i = playOrder.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i+1));
+        [playOrder[i], playOrder[j]] = [playOrder[j], playOrder[i]];
+      }
+    }
+  }
+
+  function renderPlaylist(){
+    emptyTracks.style.display = tracks.length ? 'none' : 'block';
+    playlistEl.innerHTML = '';
+    tracks.forEach((t, i) => {
+      const li = document.createElement('li');
+      if(i === currentTrackIndex) li.classList.add('playing');
+      const thumbHtml = t.artwork ? `<img src="${URL.createObjectURL(t.artwork)}">` : ART_PLACEHOLDER_TRACK;
+      li.innerHTML = `
+        <span class="track-num">${String(i+1).padStart(2,'0')}</span>
+        <div class="track-thumb">${thumbHtml}</div>
+        <div class="track-info">
+          <div class="track-name">${escapeHtml(t.name)}</div>
+          ${t.artist ? `<div class="track-artist">${escapeHtml(t.artist)}</div>` : ''}
+        </div>
+        <span class="track-dur">${t.duration ? fmtTime(t.duration) : ''}</span>
+        <button class="track-remove" data-i="${i}">✕</button>
+      `;
+      li.addEventListener('click', (ev) => {
+        if(ev.target.closest('.track-remove')) return;
+        loadTrack(i);
+        playAudio();
+      });
+      li.querySelector('.track-remove').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        removeTrack(i);
+      });
+      playlistEl.appendChild(li);
+    });
+  }
+
+  async function removeTrack(i){
+    const track = tracks[i];
+    const wasCurrent = i === currentTrackIndex;
+    await idbDelete('tracks', track.id);
+    tracks.splice(i, 1);
+    if(wasCurrent){ stopPlayback(); currentTrackIndex = -1; resetNowPlaying(); }
+    else if(i < currentTrackIndex) currentTrackIndex--;
+    rebuildOrder();
+    renderPlaylist();
+  }
+
+  function resetNowPlaying(){
+    npTitle.textContent = '曲を選んでください';
+    npTitle.classList.add('placeholder');
+    npArtist.textContent = '';
+    npIndex.textContent = '';
+    npArt.classList.remove('playing');
+    const album = albums.find(a => a.id === currentAlbumId);
+    updateNpArt(album ? album.artwork : null);
+    lyricsText.value = '';
+    lyricsText.disabled = true;
+    lyricsHint.textContent = '曲を選ぶと編集できます';
+  }
+
+  function updateNpArt(blob){
+    if(currentArtUrl){ URL.revokeObjectURL(currentArtUrl); currentArtUrl = null; }
+    if(blob){
+      currentArtUrl = URL.createObjectURL(blob);
+      npArt.innerHTML = `<img src="${currentArtUrl}">`;
+    } else {
+      npArt.innerHTML = ART_PLACEHOLDER_NP;
+    }
+  }
+
+  function stopPlayback(){
+    audio.pause();
+    if(currentObjectUrl){ URL.revokeObjectURL(currentObjectUrl); currentObjectUrl = null; }
+    audio.src = '';
+    isPlaying = false;
+    updatePlayIcon();
+    npArt.classList.remove('playing');
+    if(vizRAF) cancelAnimationFrame(vizRAF);
+    drawIdleLine(vizCanvas.getBoundingClientRect().width, vizCanvas.getBoundingClientRect().height);
+  }
+
+  function loadTrack(i){
+    if(i < 0 || i >= tracks.length) return;
+    if(currentObjectUrl){ URL.revokeObjectURL(currentObjectUrl); }
+    currentTrackIndex = i;
+    const t = tracks[i];
+    currentObjectUrl = URL.createObjectURL(t.audio);
+    audio.src = currentObjectUrl;
+    npTitle.textContent = t.name;
+    npTitle.classList.remove('placeholder');
+    npArtist.textContent = t.artist || '';
+    npIndex.textContent = `${i+1} / ${tracks.length}`;
+    const album = albums.find(a => a.id === currentAlbumId);
+    updateNpArt(t.artwork || (album ? album.artwork : null));
+    lyricsText.disabled = false;
+    lyricsText.value = t.lyrics || '';
+    lyricsHint.textContent = '自動で保存されます';
+    renderPlaylist();
+  }
+
+  function playAudio(){
+    setupAudioGraph();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    audio.play();
+    isPlaying = true;
+    updatePlayIcon();
+    npArt.classList.add('playing');
+    if(vizRAF) cancelAnimationFrame(vizRAF);
+    drawVisualizer();
+  }
+  function pauseAudio(){
+    audio.pause();
+    isPlaying = false;
+    updatePlayIcon();
+    npArt.classList.remove('playing');
+  }
+  function updatePlayIcon(){
+    playIcon.innerHTML = isPlaying
+      ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
+      : '<path d="M8 5v14l11-7z"/>';
+  }
+
+  playBtn.addEventListener('click', () => {
+    if(currentTrackIndex === -1 && tracks.length > 0){ loadTrack(0); playAudio(); return; }
+    if(currentTrackIndex === -1) return;
+    isPlaying ? pauseAudio() : playAudio();
+  });
+
+  function step(dir){
+    if(tracks.length === 0) return;
+    if(currentTrackIndex === -1){ loadTrack(playOrder[0]); playAudio(); return; }
+    const posInOrder = playOrder.indexOf(currentTrackIndex);
+    let nextPos = posInOrder + dir;
+    if(nextPos >= playOrder.length){
+      if(repeatMode === 'all'){ nextPos = 0; } else { pauseAudio(); return; }
+    }
+    if(nextPos < 0){ nextPos = playOrder.length - 1; }
+    loadTrack(playOrder[nextPos]);
+    playAudio();
+  }
+
+  prevBtn.addEventListener('click', () => {
+    if(audio.currentTime > 3){ audio.currentTime = 0; return; }
+    step(-1);
+  });
+  nextBtn.addEventListener('click', () => step(1));
+
+  shuffleBtn.addEventListener('click', () => {
+    shuffleOn = !shuffleOn;
+    shuffleBtn.classList.toggle('active', shuffleOn);
+    rebuildOrder();
+  });
+  repeatBtn.addEventListener('click', () => {
+    repeatMode = repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none';
+    repeatBtn.classList.toggle('active', repeatMode !== 'none');
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    const pct = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+    progressFill.style.width = pct + '%';
+    progressKnot.style.left = pct + '%';
+    curTimeEl.textContent = fmtTime(audio.currentTime);
+  });
+  audio.addEventListener('loadedmetadata', () => { durTimeEl.textContent = fmtTime(audio.duration); });
+  audio.addEventListener('ended', () => {
+    if(repeatMode === 'one'){ audio.currentTime = 0; playAudio(); }
+    else { step(1); }
+  });
+  progressTrack.addEventListener('click', (e) => {
+    if(!audio.duration) return;
+    const rect = progressTrack.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = pct * audio.duration;
+  });
+  volSlider.addEventListener('input', () => { audio.volume = parseFloat(volSlider.value); });
+
+  // ---------- Lyrics ----------
+  lyricsToggle.addEventListener('click', () => {
+    lyricsPanel.classList.toggle('open');
+    lyricsToggle.classList.toggle('active');
+  });
+  lyricsText.addEventListener('input', () => {
+    if(currentTrackIndex === -1) return;
+    clearTimeout(lyricsSaveTimer);
+    lyricsHint.textContent = '入力中…';
+    lyricsSaveTimer = setTimeout(async () => {
+      const t = tracks[currentTrackIndex];
+      t.lyrics = lyricsText.value;
+      await idbPut('tracks', t);
+      lyricsHint.textContent = '保存しました';
+      setTimeout(() => { if(lyricsHint.textContent === '保存しました') lyricsHint.textContent = '自動で保存されます'; }, 1500);
+    }, 600);
+  });
+</script>
+</body>
+</html>
