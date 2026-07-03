@@ -95,7 +95,12 @@
 
   /* --- 現在のアルバム --- */
   .current-album-bar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-  .current-album-name{ font-family:'Shippori Mincho', serif; font-size:17px; font-weight:500; color:var(--ink); }
+  .current-album-name{ font-family:'Shippori Mincho', serif; font-size:17px; font-weight:500; color:var(--ink); cursor:pointer; border-bottom:1px dashed transparent; }
+  .current-album-name:hover{ border-bottom-color:var(--ink-faint); }
+  .current-album-name input{
+    font-family:'Shippori Mincho', serif; font-size:17px; font-weight:500; color:var(--ink);
+    background:none; border:none; border-bottom:1px solid var(--orange); outline:none; width:220px; max-width:60vw;
+  }
   .album-actions{ display:flex; gap:10px; align-items:center; }
   .add-btn{
     font-family:'Zen Kaku Gothic New', sans-serif; font-size:12.5px; letter-spacing:0.02em;
@@ -193,6 +198,13 @@
   .track-remove{ background:none; border:none; color:var(--ink-faint); font-size:14px; cursor:pointer; padding:2px 6px; opacity:0; transition:opacity 0.15s; flex-shrink:0; }
   .playlist li:hover .track-remove{ opacity:1; }
   .track-remove:hover{ color:var(--ink); }
+  .track-edit{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:2px 5px; opacity:0; transition:opacity 0.15s; flex-shrink:0; display:flex; align-items:center; }
+  .playlist li:hover .track-edit{ opacity:1; }
+  .track-edit:hover{ color:var(--amber); }
+  .track-name-input{
+    font-family:'Zen Kaku Gothic New'; font-size:14px; color:var(--ink); background:none;
+    border:none; border-bottom:1px solid var(--orange); outline:none; width:100%; padding:0;
+  }
   .empty-tracks{ font-size:12px; color:var(--ink-faint); padding:16px 4px; }
 
   footer{ text-align:center; margin-top:40px; font-size:11px; color:var(--ink-faint); }
@@ -219,7 +231,7 @@
 
   <div id="albumDetail" style="display:none;">
     <div class="current-album-bar">
-      <div class="current-album-name" id="currentAlbumName"></div>
+        <div class="current-album-name" id="currentAlbumName" title="タップして名前を編集"></div>
       <div class="album-actions">
         <button class="icon-btn" id="artworkBtn" title="アートワークを変更">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
@@ -451,6 +463,48 @@
     ctx.closePath();
   }
 
+  // ---------- Media Session (background / lock screen playback) ----------
+  function updateMediaSessionMetadata(){
+    if(!('mediaSession' in navigator)) return;
+    if(currentTrackIndex === -1){
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    const t = tracks[currentTrackIndex];
+    const album = albums.find(a => a.id === currentAlbumId);
+    const artworkBlob = t.artwork || (album ? album.artwork : null);
+    const artwork = [];
+    if(artworkBlob){
+      artwork.push({ src: URL.createObjectURL(artworkBlob), sizes: '512x512', type: artworkBlob.type || 'image/png' });
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: t.name,
+      artist: t.artist || '',
+      album: album ? album.name : '',
+      artwork
+    });
+  }
+
+  function setupMediaSessionHandlers(){
+    if(!('mediaSession' in navigator)) return;
+    navigator.mediaSession.setActionHandler('play', () => playAudio());
+    navigator.mediaSession.setActionHandler('pause', () => pauseAudio());
+    navigator.mediaSession.setActionHandler('previoustrack', () => { audio.currentTime > 3 ? (audio.currentTime = 0) : step(-1); });
+    navigator.mediaSession.setActionHandler('nexttrack', () => step(1));
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if(details.seekTime != null && audio.duration) audio.currentTime = details.seekTime;
+    });
+  }
+  setupMediaSessionHandlers();
+
+  // iOS suspends the Web Audio context in the background; resume it as soon as
+  // the page becomes visible again so playback/visualizer recover cleanly.
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended'){
+      audioCtx.resume();
+    }
+  });
+
   // ---------- Init ----------
   (async function init(){
     db = await openDB();
@@ -467,6 +521,32 @@
   })();
 
   // ---------- Albums ----------
+  currentAlbumName.addEventListener('click', () => {
+    const album = albums.find(a => a.id === currentAlbumId);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = album.name;
+    input.maxLength = 60;
+    currentAlbumName.replaceWith(input);
+    input.focus();
+    input.select();
+    const save = async () => {
+      const newName = input.value.trim();
+      if(newName){
+        album.name = newName;
+        await idbPut('albums', album);
+      }
+      input.replaceWith(currentAlbumName);
+      currentAlbumName.textContent = album.name;
+      renderAlbumGrid();
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') input.blur();
+      if(e.key === 'Escape'){ input.value = album.name; input.blur(); }
+    });
+  });
+
   newAlbumBtn.addEventListener('click', () => {
     albumForm.classList.toggle('open');
     if(albumForm.classList.contains('open')) albumNameInput.focus();
@@ -611,6 +691,9 @@
           ${t.artist ? `<div class="track-artist">${escapeHtml(t.artist)}</div>` : ''}
         </div>
         <span class="track-dur">${t.duration ? fmtTime(t.duration) : ''}</span>
+        <button class="track-edit" data-i="${i}" title="タイトルを編集">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
         <button class="track-remove" data-i="${i}">✕</button>
       `;
       li.addEventListener('click', (ev) => {
@@ -618,11 +701,45 @@
         loadTrack(i);
         playAudio();
       });
+      li.querySelector('.track-edit').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        startEditTrackName(li, i);
+      });
       li.querySelector('.track-remove').addEventListener('click', (ev) => {
         ev.stopPropagation();
         removeTrack(i);
       });
       playlistEl.appendChild(li);
+    });
+  }
+
+  function startEditTrackName(li, i){
+    const nameEl = li.querySelector('.track-name');
+    const t = tracks[i];
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'track-name-input';
+    input.value = t.name;
+    input.maxLength = 120;
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+    const save = async () => {
+      const newName = input.value.trim();
+      if(newName) {
+        t.name = newName;
+        await idbPut('tracks', t);
+        if(i === currentTrackIndex){
+          npTitle.textContent = t.name;
+          updateMediaSessionMetadata();
+        }
+      }
+      renderPlaylist();
+    };
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter') input.blur();
+      if(e.key === 'Escape'){ input.value = t.name; input.blur(); }
     });
   }
 
@@ -688,6 +805,7 @@
     lyricsText.value = t.lyrics || '';
     lyricsHint.textContent = '自動で保存されます';
     renderPlaylist();
+    updateMediaSessionMetadata();
   }
 
   function playAudio(){
@@ -697,6 +815,7 @@
     isPlaying = true;
     updatePlayIcon();
     npArt.classList.add('playing');
+    if('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
     if(vizRAF) cancelAnimationFrame(vizRAF);
     drawVisualizer();
   }
@@ -705,6 +824,7 @@
     isPlaying = false;
     updatePlayIcon();
     npArt.classList.remove('playing');
+    if('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   }
   function updatePlayIcon(){
     playIcon.innerHTML = isPlaying
@@ -752,6 +872,15 @@
     progressFill.style.width = pct + '%';
     progressKnot.style.left = pct + '%';
     curTimeEl.textContent = fmtTime(audio.currentTime);
+    if('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession && audio.duration){
+      try{
+        navigator.mediaSession.setPositionState({
+          duration: audio.duration,
+          playbackRate: audio.playbackRate,
+          position: audio.currentTime
+        });
+      }catch(err){}
+    }
   });
   audio.addEventListener('loadedmetadata', () => { durTimeEl.textContent = fmtTime(audio.duration); });
   audio.addEventListener('ended', () => {
