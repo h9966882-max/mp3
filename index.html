@@ -226,7 +226,7 @@
         </button>
         <input type="file" id="artworkInput" accept="image/*">
         <label class="add-btn" for="trackInput">＋ 曲を追加</label>
-        <input type="file" id="trackInput" accept="audio/*,.mp3,.m4a,.wav,.aac,.flac,.ogg" multiple>
+        <input type="file" id="trackInput" multiple>
       </div>
     </div>
 
@@ -533,7 +533,9 @@
 
   // ---------- Tracks ----------
   trackInput.addEventListener('change', async (e) => {
-    const files = Array.from(e.target.files);
+    const files = Array.from(e.target.files).filter(f =>
+      f.type.startsWith('audio') || /\.(mp3|m4a|wav|aac|flac|ogg|wma)$/i.test(f.name)
+    );
     trackInput.value = '';
     const album = albums.find(a => a.id === currentAlbumId);
     let order = tracks.length;
