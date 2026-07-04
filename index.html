@@ -48,6 +48,16 @@
   }
   header p{ margin-top:6px; font-size:12px; color:var(--ink-soft); letter-spacing:0.04em; }
 
+  .backup-row{ display:flex; align-items:center; gap:10px; margin-bottom:28px; flex-wrap:wrap; }
+  .backup-btn{
+    display:flex; align-items:center; gap:6px; font-family:'Zen Kaku Gothic New', sans-serif;
+    font-size:12px; background:none; border:1px solid var(--line); color:var(--ink-soft);
+    padding:6px 13px; border-radius:999px; cursor:pointer; transition:0.2s;
+  }
+  .backup-btn:hover{ border-color:var(--amber); color:var(--amber); }
+  .backup-btn:disabled{ opacity:0.5; cursor:default; }
+  .backup-status{ font-size:11px; color:var(--ink-faint); }
+
   /* --- アルバム一覧 --- */
   .section-label{
     font-size:11px; color:var(--ink-faint); letter-spacing:0.1em;
@@ -169,23 +179,7 @@
   }
   .play-btn:hover{ filter:brightness(1.08); }
 
-  .side-controls{ display:flex; justify-content:space-between; align-items:center; }
-  .vol-wrap{ display:flex; align-items:center; gap:8px; }
-  input[type="range"].vol{
-    -webkit-appearance:none; appearance:none;
-    width:80px; height:24px; background:transparent; outline:none;
-  }
-  input[type="range"].vol::-webkit-slider-runnable-track{
-    height:2px; background:var(--line); border-radius:2px;
-  }
-  input[type="range"].vol::-webkit-slider-thumb{
-    -webkit-appearance:none; width:16px; height:16px; margin-top:-7px;
-    border-radius:50%; background:var(--amber); cursor:pointer;
-  }
-  input[type="range"].vol::-moz-range-track{ height:2px; background:var(--line); border-radius:2px; }
-  input[type="range"].vol::-moz-range-thumb{
-    width:16px; height:16px; border:none; border-radius:50%; background:var(--amber); cursor:pointer;
-  }
+  .side-controls{ display:flex; justify-content:flex-end; align-items:center; }
   .lyrics-toggle{ font-size:11px; color:var(--ink-faint); background:none; border:none; cursor:pointer; letter-spacing:0.03em; }
   .lyrics-toggle:hover{ color:var(--ink); }
   .lyrics-toggle.active{ color:var(--amber); }
@@ -267,6 +261,19 @@
     <p>アルバムごとに曲をまとめて聴く</p>
   </header>
 
+  <div class="backup-row">
+    <button class="backup-btn" id="exportBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      書き出し
+    </button>
+    <button class="backup-btn" id="importBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      読み込み
+    </button>
+    <input type="file" id="importInput" accept=".json,application/json">
+    <span class="backup-status" id="backupStatus"></span>
+  </div>
+
   <div class="section-label">
     <span>アルバム</span>
     <button class="add-album-btn" id="newAlbumBtn">＋ 新規アルバム</button>
@@ -334,10 +341,6 @@
       </div>
 
       <div class="side-controls">
-        <div class="vol-wrap">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:var(--ink-faint)"><path d="M3 9v6h4l5 5V4L7 9H3z"/></svg>
-          <input type="range" class="vol" id="volSlider" min="0" max="1" step="0.01" value="0.8">
-        </div>
         <button class="lyrics-toggle" id="lyricsToggle">歌詞</button>
       </div>
 
@@ -379,6 +382,129 @@
   function idbGetAllByAlbum(albumId){ return new Promise((res, rej) => { const r = store('tracks').index('albumId').getAll(albumId); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
   function idbPut(name, val){ return new Promise((res, rej) => { const r = store(name,'readwrite').put(val); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
   function idbDelete(name, key){ return new Promise((res, rej) => { const r = store(name,'readwrite').delete(key); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
+
+  // ---------- Backup (export / import) ----------
+  function blobToDataURL(blob){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+  function dataURLToBlob(dataURL){
+    const [header, base64] = dataURL.split(',');
+    const mimeMatch = header.match(/data:(.*?);base64/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for(let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
+  async function exportBackup(){
+    exportBtn.disabled = true;
+    importBtn.disabled = true;
+    try{
+      const albumsAll = await idbGetAll('albums');
+      const tracksAll = await idbGetAll('tracks');
+      const albumsOut = [];
+      for(let i = 0; i < albumsAll.length; i++){
+        const a = albumsAll[i];
+        backupStatus.textContent = `書き出し中… アルバム ${i+1}/${albumsAll.length}`;
+        albumsOut.push({
+          id: a.id, name: a.name, order: a.order, createdAt: a.createdAt,
+          artwork: a.artwork ? await blobToDataURL(a.artwork) : null
+        });
+      }
+      const tracksOut = [];
+      for(let i = 0; i < tracksAll.length; i++){
+        const t = tracksAll[i];
+        backupStatus.textContent = `書き出し中… 曲 ${i+1}/${tracksAll.length}`;
+        tracksOut.push({
+          id: t.id, albumId: t.albumId, name: t.name, artist: t.artist || '',
+          lyrics: t.lyrics || '', duration: t.duration || 0, order: t.order,
+          audio: await blobToDataURL(t.audio),
+          artwork: t.artwork ? await blobToDataURL(t.artwork) : null
+        });
+      }
+      const backup = { version: 1, exportedAt: new Date().toISOString(), albums: albumsOut, tracks: tracksOut };
+      const json = JSON.stringify(backup);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `mp3player-backup-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      backupStatus.textContent = '書き出し完了';
+    }catch(err){
+      console.warn('export failed', err);
+      backupStatus.textContent = '書き出しに失敗しました';
+    }
+    exportBtn.disabled = false;
+    importBtn.disabled = false;
+    setTimeout(() => { backupStatus.textContent = ''; }, 3000);
+  }
+
+  async function importBackup(file){
+    exportBtn.disabled = true;
+    importBtn.disabled = true;
+    try{
+      const text = await file.text();
+      const backup = JSON.parse(text);
+      if(!backup || !Array.isArray(backup.albums) || !Array.isArray(backup.tracks)){
+        throw new Error('invalid backup file');
+      }
+      for(let i = 0; i < backup.albums.length; i++){
+        const a = backup.albums[i];
+        backupStatus.textContent = `読み込み中… アルバム ${i+1}/${backup.albums.length}`;
+        await idbPut('albums', {
+          id: a.id, name: a.name, order: a.order, createdAt: a.createdAt,
+          artwork: a.artwork ? dataURLToBlob(a.artwork) : null
+        });
+      }
+      for(let i = 0; i < backup.tracks.length; i++){
+        const t = backup.tracks[i];
+        backupStatus.textContent = `読み込み中… 曲 ${i+1}/${backup.tracks.length}`;
+        await idbPut('tracks', {
+          id: t.id, albumId: t.albumId, name: t.name, artist: t.artist || '',
+          lyrics: t.lyrics || '', duration: t.duration || 0, order: t.order,
+          audio: dataURLToBlob(t.audio),
+          artwork: t.artwork ? dataURLToBlob(t.artwork) : null
+        });
+      }
+      // caches now point at stale/possibly-overwritten blobs; clear and reload fresh
+      albumArtUrlCache.forEach(u => URL.revokeObjectURL(u));
+      trackArtUrlCache.forEach(u => URL.revokeObjectURL(u));
+      albumArtUrlCache.clear();
+      trackArtUrlCache.clear();
+      albums = await idbGetAll('albums');
+      albums.sort((x, y) => x.order - y.order);
+      renderAlbumGrid();
+      if(albums.length > 0) selectAlbum(albums[0].id);
+      backupStatus.textContent = '読み込み完了';
+    }catch(err){
+      console.warn('import failed', err);
+      backupStatus.textContent = '読み込みに失敗しました。ファイルを確認してください';
+    }
+    exportBtn.disabled = false;
+    importBtn.disabled = false;
+    setTimeout(() => { backupStatus.textContent = ''; }, 4000);
+  }
+
+  exportBtn.addEventListener('click', exportBackup);
+  importBtn.addEventListener('click', () => importInput.click());
+  importInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    importInput.value = '';
+    if(!file) return;
+    if(!confirm('バックアップを読み込みます。今のデータに追加・上書きされます。よろしいですか？')) return;
+    await importBackup(file);
+  });
 
   function uid(){ return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,10); }
   function stripExt(name){ return name.replace(/\.[^/.]+$/, ''); }
@@ -428,6 +554,10 @@
   const albumDetail = document.getElementById('albumDetail');
   const currentAlbumName = document.getElementById('currentAlbumName');
   const newAlbumBtn = document.getElementById('newAlbumBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const importInput = document.getElementById('importInput');
+  const backupStatus = document.getElementById('backupStatus');
   const albumForm = document.getElementById('albumForm');
   const albumNameInput = document.getElementById('albumNameInput');
   const albumCreateBtn = document.getElementById('albumCreateBtn');
@@ -451,7 +581,6 @@
   const progressKnot = document.getElementById('progressKnot');
   const curTimeEl = document.getElementById('curTime');
   const durTimeEl = document.getElementById('durTime');
-  const volSlider = document.getElementById('volSlider');
   const lyricsToggle = document.getElementById('lyricsToggle');
   const lyricsPanel = document.getElementById('lyricsPanel');
   const lyricsText = document.getElementById('lyricsText');
@@ -462,6 +591,22 @@
   const ART_PLACEHOLDER_ALBUM = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
   const ART_PLACEHOLDER_TRACK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
   const ART_PLACEHOLDER_NP = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+
+  // If an artwork image fails to load (e.g. corrupted or stale blob data),
+  // fall back to the placeholder icon instead of showing a broken-image glyph.
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if(!img || img.tagName !== 'IMG') return;
+    const npArtContainer = img.closest('#npArt');
+    const trackThumb = img.closest('.track-thumb');
+    const albumArt = img.closest('.album-art');
+    if(npArtContainer){ npArtContainer.innerHTML = ART_PLACEHOLDER_NP; }
+    else if(trackThumb){ trackThumb.innerHTML = ART_PLACEHOLDER_TRACK; }
+    else if(albumArt){
+      const wasAllSongs = albumArt.classList.contains('all-songs-art');
+      if(!wasAllSongs) albumArt.innerHTML = ART_PLACEHOLDER_ALBUM;
+    }
+  }, true);
 
 
   // ---------- Media Session (background / lock screen playback) ----------
@@ -1164,7 +1309,8 @@
     const pct = (e.clientX - rect.left) / rect.width;
     audio.currentTime = pct * audio.duration;
   });
-  volSlider.addEventListener('input', () => { audio.volume = parseFloat(volSlider.value); });
+
+
 
   // ---------- Lyrics ----------
   lyricsToggle.addEventListener('click', () => {
