@@ -365,6 +365,7 @@
   }
   function store(name, mode='readonly'){ return db.transaction(name, mode).objectStore(name); }
   function idbGetAll(name){ return new Promise((res, rej) => { const r = store(name).getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+  function idbGet(name, key){ return new Promise((res, rej) => { const r = store(name).get(key); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
   function idbGetAllByAlbum(albumId){ return new Promise((res, rej) => { const r = store('tracks').index('albumId').getAll(albumId); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
   function idbPut(name, val){ return new Promise((res, rej) => { const r = store(name,'readwrite').put(val); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
   function idbDelete(name, key){ return new Promise((res, rej) => { const r = store(name,'readwrite').delete(key); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
@@ -588,8 +589,14 @@
     const save = async () => {
       const newName = input.value.trim();
       if(newName){
-        album.name = newName;
-        await idbPut('albums', album);
+        try{
+          const fresh = await idbGet('albums', album.id);
+          fresh.name = newName;
+          await idbPut('albums', fresh);
+          album.name = newName;
+        }catch(err){
+          console.warn('album rename failed', err);
+        }
       }
       input.replaceWith(currentAlbumName);
       currentAlbumName.textContent = album.name;
@@ -658,9 +665,16 @@
     const j = idx + dir;
     if(j < 0 || j >= albums.length) return;
     const a = albums[idx], b = albums[j];
-    const tmp = a.order; a.order = b.order; b.order = tmp;
-    await idbPut('albums', a);
-    await idbPut('albums', b);
+    try{
+      const [freshA, freshB] = await Promise.all([idbGet('albums', a.id), idbGet('albums', b.id)]);
+      const tmp = freshA.order; freshA.order = freshB.order; freshB.order = tmp;
+      await idbPut('albums', freshA);
+      await idbPut('albums', freshB);
+      a.order = freshA.order; b.order = freshB.order;
+    }catch(err){
+      console.warn('album reorder failed', err);
+      return;
+    }
     albums.sort((x,y) => x.order - y.order);
     renderAlbumGrid();
   }
@@ -851,11 +865,17 @@
     const save = async () => {
       const newName = input.value.trim();
       if(newName) {
-        t.name = newName;
-        await idbPut('tracks', t);
-        if(i === currentTrackIndex){
-          npTitle.textContent = t.name;
-          updateMediaSessionMetadata();
+        try{
+          const fresh = await idbGet('tracks', t.id);
+          fresh.name = newName;
+          await idbPut('tracks', fresh);
+          t.name = newName;
+          if(i === currentTrackIndex){
+            npTitle.textContent = t.name;
+            updateMediaSessionMetadata();
+          }
+        }catch(err){
+          console.warn('track rename failed', err);
         }
       }
       renderPlaylist();
@@ -871,9 +891,16 @@
     const j = i + dir;
     if(j < 0 || j >= tracks.length) return;
     const a = tracks[i], b = tracks[j];
-    const tmp = a.order; a.order = b.order; b.order = tmp;
-    await idbPut('tracks', a);
-    await idbPut('tracks', b);
+    try{
+      const [freshA, freshB] = await Promise.all([idbGet('tracks', a.id), idbGet('tracks', b.id)]);
+      const tmp = freshA.order; freshA.order = freshB.order; freshB.order = tmp;
+      await idbPut('tracks', freshA);
+      await idbPut('tracks', freshB);
+      a.order = freshA.order; b.order = freshB.order;
+    }catch(err){
+      console.warn('track reorder failed', err);
+      return;
+    }
     tracks.sort((x,y) => x.order - y.order);
     if(currentTrackIndex === i) currentTrackIndex = j;
     else if(currentTrackIndex === j) currentTrackIndex = i;
@@ -908,10 +935,18 @@
   async function moveTrackToAlbum(i, destAlbumId){
     const track = tracks[i];
     const wasCurrent = i === currentTrackIndex;
-    const destTracks = await idbGetAllByAlbum(destAlbumId);
-    track.albumId = destAlbumId;
-    track.order = destTracks.length;
-    await idbPut('tracks', track);
+    try{
+      const destTracks = await idbGetAllByAlbum(destAlbumId);
+      const fresh = await idbGet('tracks', track.id);
+      fresh.albumId = destAlbumId;
+      fresh.order = destTracks.length;
+      await idbPut('tracks', fresh);
+      track.albumId = destAlbumId;
+      track.order = fresh.order;
+    }catch(err){
+      console.warn('move track to album failed', err);
+      return;
+    }
     invalidateTrackArtUrl(track.id);
     tracks.splice(i, 1);
     if(wasCurrent){ stopPlayback(); currentTrackIndex = -1; resetNowPlaying(); }
@@ -919,10 +954,16 @@
     rebuildOrder();
     const destAlbum = albums.find(a => a.id === destAlbumId);
     if(destAlbum && !destAlbum.artwork && track.artwork){
-      destAlbum.artwork = track.artwork;
-      await idbPut('albums', destAlbum);
-      invalidateAlbumArtUrl(destAlbum.id);
-      renderAlbumGrid();
+      try{
+        const freshAlbum = await idbGet('albums', destAlbum.id);
+        freshAlbum.artwork = track.artwork;
+        await idbPut('albums', freshAlbum);
+        destAlbum.artwork = track.artwork;
+        invalidateAlbumArtUrl(destAlbum.id);
+        renderAlbumGrid();
+      }catch(err){
+        console.warn('setting destination album artwork failed', err);
+      }
     }
   }
 
@@ -1164,11 +1205,20 @@
     clearTimeout(lyricsSaveTimer);
     lyricsHint.textContent = '入力中…';
     lyricsSaveTimer = setTimeout(async () => {
-      const t = tracks[currentTrackIndex];
-      t.lyrics = lyricsText.value;
-      await idbPut('tracks', t);
-      lyricsHint.textContent = '保存しました';
-      setTimeout(() => { if(lyricsHint.textContent === '保存しました') lyricsHint.textContent = '自動で保存されます'; }, 1500);
+      const localT = tracks[currentTrackIndex];
+      if(!localT) return;
+      const newLyrics = lyricsText.value;
+      try{
+        const fresh = await idbGet('tracks', localT.id);
+        fresh.lyrics = newLyrics;
+        await idbPut('tracks', fresh);
+        localT.lyrics = newLyrics;
+        lyricsHint.textContent = '保存しました';
+        setTimeout(() => { if(lyricsHint.textContent === '保存しました') lyricsHint.textContent = '自動で保存されます'; }, 1500);
+      }catch(err){
+        console.warn('lyrics save failed', err);
+        lyricsHint.textContent = '保存に失敗しました';
+      }
     }, 600);
   });
 </script>
