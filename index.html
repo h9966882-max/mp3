@@ -496,16 +496,6 @@
     setTimeout(() => { backupStatus.textContent = ''; }, 4000);
   }
 
-  exportBtn.addEventListener('click', exportBackup);
-  importBtn.addEventListener('click', () => importInput.click());
-  importInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    importInput.value = '';
-    if(!file) return;
-    if(!confirm('バックアップを読み込みます。今のデータに追加・上書きされます。よろしいですか？')) return;
-    await importBackup(file);
-  });
-
   function uid(){ return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,10); }
   function stripExt(name){ return name.replace(/\.[^/.]+$/, ''); }
   function fmtTime(sec){ if(!isFinite(sec) || sec < 0) sec = 0; const m = Math.floor(sec/60); const s = Math.floor(sec%60).toString().padStart(2,'0'); return `${m}:${s}`; }
@@ -586,6 +576,16 @@
   const lyricsText = document.getElementById('lyricsText');
   const lyricsHint = document.getElementById('lyricsHint');
   const retryBanner = document.getElementById('retryBanner');
+
+  exportBtn.addEventListener('click', exportBackup);
+  importBtn.addEventListener('click', () => importInput.click());
+  importInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    importInput.value = '';
+    if(!file) return;
+    if(!confirm('バックアップを読み込みます。今のデータに追加・上書きされます。よろしいですか？')) return;
+    await importBackup(file);
+  });
 
   audio.volume = 0.8;
   const ART_PLACEHOLDER_ALBUM = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
