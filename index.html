@@ -196,30 +196,38 @@
   .track-name{ font-size:14px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .track-artist{ font-size:11px; color:var(--ink-faint); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .track-dur{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-faint); flex-shrink:0; }
-  .track-remove{ background:none; border:none; color:var(--ink-faint); font-size:14px; cursor:pointer; padding:2px 6px; opacity:0; transition:opacity 0.15s; flex-shrink:0; }
-  .playlist li:hover .track-remove{ opacity:1; }
-  .track-remove:hover{ color:var(--ink); }
-  .track-edit{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:2px 5px; opacity:0; transition:opacity 0.15s; flex-shrink:0; display:flex; align-items:center; }
-  .playlist li:hover .track-edit{ opacity:1; }
+  .track-edit{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:4px 5px; flex-shrink:0; display:flex; align-items:center; }
   .track-edit:hover{ color:var(--amber); }
-  .track-order-btn{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:2px 3px; opacity:0; transition:opacity 0.15s; flex-shrink:0; display:flex; align-items:center; }
+  .track-order-btn{ background:none; border:none; color:var(--ink-soft); cursor:pointer; padding:4px 3px; flex-shrink:0; display:flex; align-items:center; }
   .track-order-btn:disabled{ visibility:hidden; }
-  .playlist li:hover .track-order-btn{ opacity:1; }
-  .track-order-btn:hover:not(:disabled){ color:var(--ink); }
-  .track-move{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:2px 5px; opacity:0; transition:opacity 0.15s; flex-shrink:0; display:flex; align-items:center; }
-  .playlist li:hover .track-move{ opacity:1; }
+  .track-order-btn:active:not(:disabled){ color:var(--amber); }
+  .track-move{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:4px 5px; flex-shrink:0; display:flex; align-items:center; }
   .track-move:hover{ color:var(--amber); }
+  .track-menu-wrap{ position:relative; flex-shrink:0; }
+  .track-menu-btn{ background:none; border:none; color:var(--ink-soft); cursor:pointer; padding:4px 6px; display:flex; align-items:center; }
+  .track-menu-btn:active{ color:var(--amber); }
+  .track-menu{
+    display:none; position:absolute; right:0; top:100%; margin-top:4px; z-index:5;
+    background:var(--bg-card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+    box-shadow:0 10px 24px -8px rgba(0,0,0,0.6); min-width:150px;
+  }
+  .track-menu.open{ display:block; }
+  .track-menu button{
+    display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:none; border:none;
+    color:var(--ink); font-family:'Zen Kaku Gothic New'; font-size:13px; padding:11px 14px; cursor:pointer;
+  }
+  .track-menu button:hover{ background:var(--bg-card-hover); }
+  .track-menu button.danger{ color:#D97878; }
   .move-select{
     font-family:'Zen Kaku Gothic New'; font-size:12px; background:var(--bg-card); color:var(--ink);
     border:1px solid var(--orange); border-radius:6px; padding:3px 6px; outline:none;
   }
   .album-order-btn{
     position:absolute; top:4px; background:rgba(14,23,18,0.85); border:1px solid var(--line); color:var(--ink-soft);
-    width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    cursor:pointer; opacity:0; transition:opacity 0.15s; z-index:2;
+    width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; z-index:2;
   }
-  .album-card:hover .album-order-btn{ opacity:1; }
-  .album-order-btn:hover{ color:var(--amber); border-color:var(--amber); }
+  .album-order-btn:active{ color:var(--amber); border-color:var(--amber); }
   .album-order-btn.prev{ left:4px; }
   .album-order-btn.next{ right:4px; }
   .track-name-input{
@@ -739,6 +747,11 @@
     }
   }
 
+  function closeAllTrackMenus(){
+    document.querySelectorAll('.track-menu.open').forEach(m => m.classList.remove('open'));
+  }
+  document.addEventListener('click', closeAllTrackMenus);
+
   function renderPlaylist(){
     emptyTracks.style.display = tracks.length ? 'none' : 'block';
     playlistEl.innerHTML = '';
@@ -761,22 +774,21 @@
         <button class="track-order-btn" data-dir="1" data-i="${i}" title="下へ" ${i===tracks.length-1?'disabled':''}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
         </button>
-        <button class="track-move" data-i="${i}" title="別のアルバムへ移動">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 8V7a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><path d="M14 19h7m0 0-3-3m3 3-3 3"/></svg>
-        </button>
-        <button class="track-edit" data-i="${i}" title="タイトルを編集">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-        </button>
-        <button class="track-remove" data-i="${i}">✕</button>
+        <div class="track-menu-wrap">
+          <button class="track-menu-btn" title="その他の操作">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+          </button>
+          <div class="track-menu">
+            <button class="menu-edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>タイトルを編集</button>
+            <button class="menu-move"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 8V7a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><path d="M14 19h7m0 0-3-3m3 3-3 3"/></svg>別のアルバムへ移動</button>
+            <button class="menu-remove danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"/></svg>削除</button>
+          </div>
+        </div>
       `;
       li.addEventListener('click', (ev) => {
-        if(ev.target.closest('.track-remove')) return;
+        if(ev.target.closest('.track-menu-wrap') || ev.target.closest('.track-order-btn')) return;
         loadTrack(i);
         playAudio();
-      });
-      li.querySelector('.track-edit').addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        startEditTrackName(li, i);
       });
       li.querySelectorAll('.track-order-btn').forEach(btn => {
         btn.addEventListener('click', (ev) => {
@@ -785,12 +797,26 @@
           moveTrackOrder(i, parseInt(btn.dataset.dir, 10));
         });
       });
-      li.querySelector('.track-move').addEventListener('click', (ev) => {
+      const menuWrap = li.querySelector('.track-menu-wrap');
+      const menu = li.querySelector('.track-menu');
+      menuWrap.querySelector('.track-menu-btn').addEventListener('click', (ev) => {
         ev.stopPropagation();
+        closeAllTrackMenus();
+        menu.classList.add('open');
+      });
+      menu.querySelector('.menu-edit').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        menu.classList.remove('open');
+        startEditTrackName(li, i);
+      });
+      menu.querySelector('.menu-move').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        menu.classList.remove('open');
         startMoveTrack(li, i);
       });
-      li.querySelector('.track-remove').addEventListener('click', (ev) => {
+      menu.querySelector('.menu-remove').addEventListener('click', (ev) => {
         ev.stopPropagation();
+        menu.classList.remove('open');
         removeTrack(i);
       });
       playlistEl.appendChild(li);
@@ -844,7 +870,6 @@
   function startMoveTrack(li, i){
     const others = albums.filter(a => a.id !== currentAlbumId);
     if(others.length === 0) return;
-    const moveBtn = li.querySelector('.track-move');
     const select = document.createElement('select');
     select.className = 'move-select';
     const placeholder = document.createElement('option');
@@ -857,7 +882,7 @@
       opt.textContent = a.name;
       select.appendChild(opt);
     });
-    moveBtn.replaceWith(select);
+    li.appendChild(select);
     select.focus();
     select.addEventListener('change', async () => {
       if(select.value) await moveTrackToAlbum(i, select.value);
@@ -954,20 +979,16 @@
   }
 
   function playAudio(){
-    audio.play();
-    isPlaying = true;
-    updatePlayIcon();
-    npArt.classList.add('playing');
-    if('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-    if(vizRAF) cancelAnimationFrame(vizRAF);
-    drawVisualizer();
+    const p = audio.play();
+    if(p && typeof p.catch === 'function'){
+      p.catch((err) => {
+        console.warn('play() failed, attempting recovery', err);
+        recoverPlaybackIfBroken();
+      });
+    }
   }
   function pauseAudio(){
     audio.pause();
-    isPlaying = false;
-    updatePlayIcon();
-    npArt.classList.remove('playing');
-    if('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   }
   function updatePlayIcon(){
     playIcon.innerHTML = isPlaying
@@ -1008,6 +1029,70 @@
   repeatBtn.addEventListener('click', () => {
     repeatMode = repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none';
     repeatBtn.classList.toggle('active', repeatMode !== 'none');
+  });
+
+  // Keep our UI state in sync with the real <audio> element, since iOS can
+  // pause playback on its own (screen lock, interruption, background limits)
+  // without going through our playAudio()/pauseAudio() functions.
+  audio.addEventListener('play', () => {
+    if(!isPlaying){
+      isPlaying = true;
+      updatePlayIcon();
+      npArt.classList.add('playing');
+      if('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+      if(vizRAF) cancelAnimationFrame(vizRAF);
+      drawVisualizer();
+    }
+  });
+  audio.addEventListener('pause', () => {
+    if(isPlaying){
+      isPlaying = false;
+      updatePlayIcon();
+      npArt.classList.remove('playing');
+      if('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+      if(vizRAF) cancelAnimationFrame(vizRAF);
+      drawIdleLine(vizCanvas.getBoundingClientRect().width, vizCanvas.getBoundingClientRect().height);
+    }
+  });
+
+  // iOS can discard the underlying data behind a blob: URL while the page is
+  // backgrounded, which otherwise shows up as garbled/broken playback when
+  // returning. Detect that and rebuild the URL from the stored file.
+  let recoveringPlayback = false;
+  async function recoverPlaybackIfBroken(){
+    if(recoveringPlayback || currentTrackIndex === -1) return;
+    const t = tracks[currentTrackIndex];
+    if(!t) return;
+    recoveringPlayback = true;
+    const resumeTime = audio.currentTime;
+    const wasPlaying = isPlaying;
+    try{
+      if(currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+      currentObjectUrl = URL.createObjectURL(t.audio);
+      audio.src = currentObjectUrl;
+      audio.load();
+      await new Promise((resolve) => {
+        const onReady = () => { audio.removeEventListener('loadedmetadata', onReady); resolve(); };
+        audio.addEventListener('loadedmetadata', onReady);
+        setTimeout(resolve, 1500); // fallback so we never hang forever
+      });
+      audio.currentTime = resumeTime;
+      if(wasPlaying) await audio.play();
+    }catch(err){
+      console.warn('playback recovery failed', err);
+    }
+    recoveringPlayback = false;
+  }
+  audio.addEventListener('error', recoverPlaybackIfBroken);
+  audio.addEventListener('stalled', recoverPlaybackIfBroken);
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && currentTrackIndex !== -1){
+      // If the audio silently died while backgrounded (no data, stuck at 0
+      // duration, etc.), rebuild it from the stored blob.
+      if(audio.error || (audio.readyState === 0 && audio.networkState === 3)){
+        recoverPlaybackIfBroken();
+      }
+    }
   });
 
   audio.addEventListener('timeupdate', () => {
@@ -1058,4 +1143,3 @@
 </script>
 </body>
 </html>
-
