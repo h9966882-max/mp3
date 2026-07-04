@@ -93,6 +93,8 @@
   .album-name{ font-size:12.5px; font-weight:500; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .album-count{ font-size:10.5px; color:var(--ink-faint); font-family:'JetBrains Mono', monospace; }
   .no-albums{ font-size:12px; color:var(--ink-soft); margin-bottom:34px; }
+  .all-songs-art{ background:linear-gradient(135deg, #24352A, #1B241D); }
+  .all-songs-art svg{ color:var(--amber); }
 
   /* --- 現在のアルバム --- */
   .current-album-bar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
@@ -138,12 +140,11 @@
   .np-index{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-faint); margin-top:6px; }
 
   /* --- イコライザー可視化 --- */
-  .visualizer-wrap{ height:44px; margin-bottom:14px; border-radius:8px; overflow:hidden; background:#0F0D11; border:1px solid var(--line); position:relative; }
-  #visualizer{ width:100%; height:100%; display:block; }
   .retry-banner{
     display:none; align-items:center; justify-content:center; gap:8px;
-    position:absolute; inset:0; background:rgba(14,23,18,0.92);
-    color:var(--amber); font-size:12px; cursor:pointer; text-align:center; padding:0 12px;
+    background:rgba(217,121,61,0.12); border:1px solid var(--orange); border-radius:8px;
+    color:var(--amber); font-size:12px; cursor:pointer; text-align:center; padding:10px 12px;
+    margin-bottom:14px;
   }
   .retry-banner.show{ display:flex; }
   .retry-banner svg{ flex-shrink:0; }
@@ -170,8 +171,21 @@
 
   .side-controls{ display:flex; justify-content:space-between; align-items:center; }
   .vol-wrap{ display:flex; align-items:center; gap:8px; }
-  input[type="range"].vol{ -webkit-appearance:none; width:70px; height:2px; background:var(--line); outline:none; border-radius:2px; }
-  input[type="range"].vol::-webkit-slider-thumb{ -webkit-appearance:none; width:9px; height:9px; border-radius:50%; background:var(--amber); cursor:pointer; }
+  input[type="range"].vol{
+    -webkit-appearance:none; appearance:none;
+    width:80px; height:24px; background:transparent; outline:none;
+  }
+  input[type="range"].vol::-webkit-slider-runnable-track{
+    height:2px; background:var(--line); border-radius:2px;
+  }
+  input[type="range"].vol::-webkit-slider-thumb{
+    -webkit-appearance:none; width:16px; height:16px; margin-top:-7px;
+    border-radius:50%; background:var(--amber); cursor:pointer;
+  }
+  input[type="range"].vol::-moz-range-track{ height:2px; background:var(--line); border-radius:2px; }
+  input[type="range"].vol::-moz-range-thumb{
+    width:16px; height:16px; border:none; border-radius:50%; background:var(--amber); cursor:pointer;
+  }
   .lyrics-toggle{ font-size:11px; color:var(--ink-faint); background:none; border:none; cursor:pointer; letter-spacing:0.03em; }
   .lyrics-toggle:hover{ color:var(--ink); }
   .lyrics-toggle.active{ color:var(--amber); }
@@ -205,9 +219,6 @@
   .track-dur{ font-family:'JetBrains Mono', monospace; font-size:11px; color:var(--ink-faint); flex-shrink:0; }
   .track-edit{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:4px 5px; flex-shrink:0; display:flex; align-items:center; }
   .track-edit:hover{ color:var(--amber); }
-  .track-order-btn{ background:none; border:none; color:var(--ink-soft); cursor:pointer; padding:4px 3px; flex-shrink:0; display:flex; align-items:center; }
-  .track-order-btn:disabled{ visibility:hidden; }
-  .track-order-btn:active:not(:disabled){ color:var(--amber); }
   .track-move{ background:none; border:none; color:var(--ink-faint); cursor:pointer; padding:4px 5px; flex-shrink:0; display:flex; align-items:center; }
   .track-move:hover{ color:var(--amber); }
   .track-menu-wrap{ position:relative; flex-shrink:0; }
@@ -225,6 +236,8 @@
   }
   .track-menu button:hover{ background:var(--bg-card-hover); }
   .track-menu button.danger{ color:#D97878; }
+  .track-menu button:disabled{ color:var(--ink-faint); cursor:default; }
+  .track-menu button:disabled:hover{ background:none; }
   .move-select{
     font-family:'Zen Kaku Gothic New'; font-size:12px; background:var(--bg-card); color:var(--ink);
     border:1px solid var(--orange); border-radius:6px; padding:3px 6px; outline:none;
@@ -288,12 +301,9 @@
         </div>
       </div>
 
-      <div class="visualizer-wrap">
-        <canvas id="visualizer"></canvas>
-        <div class="retry-banner" id="retryBanner">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
-          再生が止まりました。タップして再開
-        </div>
+      <div class="retry-banner" id="retryBanner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        再生が止まりました。タップして再開
       </div>
 
       <div class="progress-wrap">
@@ -375,6 +385,7 @@
   function fmtTime(sec){ if(!isFinite(sec) || sec < 0) sec = 0; const m = Math.floor(sec/60); const s = Math.floor(sec%60).toString().padStart(2,'0'); return `${m}:${s}`; }
 
   // ---------- State ----------
+  const ALL_ID = '__all__';
   let albums = [];
   let currentAlbumId = null;
   let tracks = [];
@@ -445,8 +456,6 @@
   const lyricsPanel = document.getElementById('lyricsPanel');
   const lyricsText = document.getElementById('lyricsText');
   const lyricsHint = document.getElementById('lyricsHint');
-  const vizCanvas = document.getElementById('visualizer');
-  const vizCtx = vizCanvas.getContext('2d');
   const retryBanner = document.getElementById('retryBanner');
 
   audio.volume = 0.8;
@@ -454,73 +463,6 @@
   const ART_PLACEHOLDER_TRACK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
   const ART_PLACEHOLDER_NP = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 
-  // ---------- Visualizer (pseudo-animated, does not touch the audio pipeline) ----------
-  // Note: an earlier version routed <audio> through the Web Audio API for real
-  // frequency analysis, but that made iOS suspend/interrupt playback in the
-  // background. This version fakes the motion with simple waveforms instead,
-  // so the <audio> element plays natively and reliably.
-  let vizRAF = null;
-
-  function resizeCanvas(){
-    const rect = vizCanvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    vizCanvas.width = rect.width * dpr;
-    vizCanvas.height = rect.height * dpr;
-    vizCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }
-  window.addEventListener('resize', resizeCanvas);
-
-  function drawVisualizer(){
-    const w = vizCanvas.getBoundingClientRect().width;
-    const h = vizCanvas.getBoundingClientRect().height;
-    vizCtx.clearRect(0, 0, w, h);
-    if(!isPlaying){
-      drawIdleLine(w, h);
-      return;
-    }
-    const barCount = 28;
-    const gap = 3;
-    const barWidth = (w - gap * (barCount - 1)) / barCount;
-    const t = performance.now() / 1000;
-    for(let i = 0; i < barCount; i++){
-      const phase = i * 0.4;
-      const wave = (Math.sin(t * 3.1 + phase) * 0.5 + 0.5) * 0.6
-                 + (Math.sin(t * 6.7 + phase * 1.6) * 0.5 + 0.5) * 0.4;
-      const barH = Math.max(3, wave * h);
-      const x = i * (barWidth + gap);
-      const y = h - barH;
-      const grad = vizCtx.createLinearGradient(0, y, 0, h);
-      grad.addColorStop(0, '#E9954A');
-      grad.addColorStop(0.55, '#D4AF6A');
-      grad.addColorStop(1, '#2F4A34');
-      vizCtx.fillStyle = grad;
-      vizCtx.shadowColor = 'rgba(217,121,61,0.5)';
-      vizCtx.shadowBlur = 6;
-      roundRect(vizCtx, x, y, barWidth, barH, 2);
-      vizCtx.fill();
-    }
-    vizRAF = requestAnimationFrame(drawVisualizer);
-  }
-
-  function drawIdleLine(w, h){
-    vizCtx.shadowBlur = 0;
-    vizCtx.strokeStyle = '#2A2830';
-    vizCtx.lineWidth = 1.5;
-    vizCtx.beginPath();
-    vizCtx.moveTo(0, h/2);
-    vizCtx.lineTo(w, h/2);
-    vizCtx.stroke();
-  }
-
-  function roundRect(ctx, x, y, w, h, r){
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
 
   // ---------- Media Session (background / lock screen playback) ----------
   function updateMediaSessionMetadata(){
@@ -530,7 +472,7 @@
       return;
     }
     const t = tracks[currentTrackIndex];
-    const album = albums.find(a => a.id === currentAlbumId);
+    const album = albums.find(a => a.id === t.albumId);
     const artUrl = getTrackArtUrl(t) || (album ? getAlbumArtUrl(album) : null);
     const artwork = [];
     if(artUrl){
@@ -571,12 +513,11 @@
     albums.sort((x,y) => x.order - y.order);
     renderAlbumGrid();
     selectAlbum(albums[0].id);
-    resizeCanvas();
-    drawIdleLine(vizCanvas.getBoundingClientRect().width, vizCanvas.getBoundingClientRect().height);
   })();
 
   // ---------- Albums ----------
   currentAlbumName.addEventListener('click', () => {
+    if(currentAlbumId === ALL_ID) return;
     const album = albums.find(a => a.id === currentAlbumId);
     const input = document.createElement('input');
     input.type = 'text';
@@ -631,6 +572,16 @@
   function renderAlbumGrid(){
     albumGrid.innerHTML = '';
     noAlbums.style.display = albums.length ? 'none' : 'block';
+
+    const allCard = document.createElement('div');
+    allCard.className = 'album-card' + (currentAlbumId === ALL_ID ? ' active' : '');
+    allCard.innerHTML = `
+      <div class="album-art all-songs-art"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+      <div class="album-name">すべての曲</div>
+    `;
+    allCard.addEventListener('click', () => selectAlbum(ALL_ID));
+    albumGrid.appendChild(allCard);
+
     albums.forEach((a, idx) => {
       const div = document.createElement('div');
       div.className = 'album-card' + (a.id === currentAlbumId ? ' active' : '');
@@ -683,13 +634,29 @@
 
   async function selectAlbum(albumId){
     currentAlbumId = albumId;
-    const album = albums.find(a => a.id === albumId);
     albumDetail.style.display = 'block';
-    currentAlbumName.textContent = album.name;
     renderAlbumGrid();
     stopPlayback();
-    tracks = (await idbGetAllByAlbum(albumId)).sort((x,y) => x.order - y.order);
     currentTrackIndex = -1;
+
+    if(albumId === ALL_ID){
+      currentAlbumName.textContent = 'すべての曲';
+      artworkBtn.style.display = 'none';
+      document.querySelector('label[for="trackInput"]').style.display = 'none';
+      const all = await idbGetAll('tracks');
+      const albumOrder = new Map(albums.map(a => [a.id, a.order]));
+      tracks = all.sort((x, y) => {
+        const diff = (albumOrder.get(x.albumId) ?? 0) - (albumOrder.get(y.albumId) ?? 0);
+        return diff !== 0 ? diff : x.order - y.order;
+      });
+    } else {
+      const album = albums.find(a => a.id === albumId);
+      currentAlbumName.textContent = album.name;
+      artworkBtn.style.display = '';
+      document.querySelector('label[for="trackInput"]').style.display = '';
+      tracks = (await idbGetAllByAlbum(albumId)).sort((x,y) => x.order - y.order);
+    }
+
     rebuildOrder();
     renderPlaylist();
     resetNowPlaying();
@@ -705,6 +672,7 @@
     await idbPut('albums', album);
     invalidateAlbumArtUrl(album.id);
     renderAlbumGrid();
+    renderPlaylist();
     if(currentTrackIndex === -1) updateNpArt(album.artwork);
     artworkInput.value = '';
   });
@@ -783,30 +751,33 @@
   function renderPlaylist(){
     emptyTracks.style.display = tracks.length ? 'none' : 'block';
     playlistEl.innerHTML = '';
+    const isAllView = currentAlbumId === ALL_ID;
     tracks.forEach((t, i) => {
       const li = document.createElement('li');
       if(i === currentTrackIndex) li.classList.add('playing');
-      const trackArtUrl = getTrackArtUrl(t);
+      const trackAlbum = albums.find(a => a.id === t.albumId);
+      const trackArtUrl = getTrackArtUrl(t) || (trackAlbum ? getAlbumArtUrl(trackAlbum) : null);
       const thumbHtml = trackArtUrl ? `<img src="${trackArtUrl}">` : ART_PLACEHOLDER_TRACK;
+      const subtitle = isAllView
+        ? (albums.find(a => a.id === t.albumId)?.name || '')
+        : (t.artist || '');
+      const moveOrderMenuHtml = isAllView ? '' : `
+            <button class="menu-order" data-dir="-1" ${i===0?'disabled':''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>上へ移動</button>
+            <button class="menu-order" data-dir="1" ${i===tracks.length-1?'disabled':''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14"/><path d="M18 13l-6 6-6-6"/></svg>下へ移動</button>`;
       li.innerHTML = `
         <span class="track-num">${String(i+1).padStart(2,'0')}</span>
         <div class="track-thumb">${thumbHtml}</div>
         <div class="track-info">
           <div class="track-name">${escapeHtml(t.name)}</div>
-          ${t.artist ? `<div class="track-artist">${escapeHtml(t.artist)}</div>` : ''}
+          ${subtitle ? `<div class="track-artist">${escapeHtml(subtitle)}</div>` : ''}
         </div>
         <span class="track-dur">${t.duration ? fmtTime(t.duration) : ''}</span>
-        <button class="track-order-btn" data-dir="-1" data-i="${i}" title="上へ" ${i===0?'disabled':''}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 15l-6-6-6 6"/></svg>
-        </button>
-        <button class="track-order-btn" data-dir="1" data-i="${i}" title="下へ" ${i===tracks.length-1?'disabled':''}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
         <div class="track-menu-wrap">
           <button class="track-menu-btn" title="その他の操作">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
           </button>
           <div class="track-menu">
+            ${moveOrderMenuHtml}
             <button class="menu-edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>タイトルを編集</button>
             <button class="menu-move"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 8V7a2 2 0 0 0-2-2h-7l-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4"/><path d="M14 19h7m0 0-3-3m3 3-3 3"/></svg>別のアルバムへ移動</button>
             <button class="menu-remove danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"/></svg>削除</button>
@@ -814,16 +785,9 @@
         </div>
       `;
       li.addEventListener('click', (ev) => {
-        if(ev.target.closest('.track-menu-wrap') || ev.target.closest('.track-order-btn')) return;
+        if(ev.target.closest('.track-menu-wrap')) return;
         loadTrack(i);
         playAudio();
-      });
-      li.querySelectorAll('.track-order-btn').forEach(btn => {
-        btn.addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          if(btn.disabled) return;
-          moveTrackOrder(i, parseInt(btn.dataset.dir, 10));
-        });
       });
       const menuWrap = li.querySelector('.track-menu-wrap');
       const menu = li.querySelector('.track-menu');
@@ -831,6 +795,14 @@
         ev.stopPropagation();
         closeAllTrackMenus();
         menu.classList.add('open');
+      });
+      menu.querySelectorAll('.menu-order').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          if(btn.disabled) return;
+          menu.classList.remove('open');
+          moveTrackOrder(i, parseInt(btn.dataset.dir, 10));
+        });
       });
       menu.querySelector('.menu-edit').addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -948,10 +920,15 @@
       return;
     }
     invalidateTrackArtUrl(track.id);
-    tracks.splice(i, 1);
-    if(wasCurrent){ stopPlayback(); currentTrackIndex = -1; resetNowPlaying(); }
-    else if(i < currentTrackIndex) currentTrackIndex--;
-    rebuildOrder();
+    const isAllView = currentAlbumId === ALL_ID;
+    if(isAllView){
+      renderPlaylist();
+    } else {
+      tracks.splice(i, 1);
+      if(wasCurrent){ stopPlayback(); currentTrackIndex = -1; resetNowPlaying(); }
+      else if(i < currentTrackIndex) currentTrackIndex--;
+      rebuildOrder();
+    }
     const destAlbum = albums.find(a => a.id === destAlbumId);
     if(destAlbum && !destAlbum.artwork && track.artwork){
       try{
@@ -1009,8 +986,6 @@
     isPlaying = false;
     updatePlayIcon();
     npArt.classList.remove('playing');
-    if(vizRAF) cancelAnimationFrame(vizRAF);
-    drawIdleLine(vizCanvas.getBoundingClientRect().width, vizCanvas.getBoundingClientRect().height);
   }
 
   function loadTrack(i){
@@ -1024,8 +999,8 @@
     npTitle.classList.remove('placeholder');
     npArtist.textContent = t.artist || '';
     npIndex.textContent = `${i+1} / ${tracks.length}`;
-    const album = albums.find(a => a.id === currentAlbumId);
-    updateNpArt(t.artwork || (album ? album.artwork : null));
+    const trackAlbum = albums.find(a => a.id === t.albumId);
+    updateNpArt(t.artwork || (trackAlbum ? trackAlbum.artwork : null));
     lyricsText.disabled = false;
     lyricsText.value = t.lyrics || '';
     lyricsHint.textContent = '自動で保存されます';
@@ -1111,8 +1086,6 @@
       updatePlayIcon();
       npArt.classList.add('playing');
       if('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-      if(vizRAF) cancelAnimationFrame(vizRAF);
-      drawVisualizer();
     }
   });
   audio.addEventListener('pause', () => {
@@ -1121,8 +1094,6 @@
       updatePlayIcon();
       npArt.classList.remove('playing');
       if('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-      if(vizRAF) cancelAnimationFrame(vizRAF);
-      drawIdleLine(vizCanvas.getBoundingClientRect().width, vizCanvas.getBoundingClientRect().height);
     }
   });
 
